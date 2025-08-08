@@ -5,7 +5,6 @@ import toast, { Toaster } from 'react-hot-toast';
 import { ShieldCheck, Truck, MessageSquare, Trash2, Plus, Minus } from 'lucide-react';
 
 // --- External Page/Component Imports ---
-// These are the only components kept in separate files for clarity
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -21,63 +20,18 @@ const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 // Cart Context
 //=================================================================
 const CartContext = createContext();
-
 const CartProvider = ({ children }) => {
-    const [cart, setCart] = useState(() => {
-        try {
-            const localData = localStorage.getItem('cart');
-            return localData ? JSON.parse(localData) : [];
-        } catch (error) {
-            return [];
-        }
-    });
+    const [cart, setCart] = useState(() => { try { const d = localStorage.getItem('cart'); return d ? JSON.parse(d) : [] } catch (e) { return [] }});
     const [cartTotal, setCartTotal] = useState(0);
-
-    useEffect(() => {
-        localStorage.setItem('cart', JSON.stringify(cart));
-        setCartTotal(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
-    }, [cart]);
-
-    const addToCart = (product, quantity = 1) => {
-        setCart(prevCart => {
-            const existingItem = prevCart.find(item => item.id === product.id);
-            if (existingItem) {
-                return prevCart.map(item =>
-                    item.id === product.id
-                        ? { ...item, quantity: item.quantity + quantity }
-                        : item
-                );
-            }
-            return [...prevCart, { ...product, quantity }];
-        });
-    };
-
-    const removeFromCart = (productId) => {
-        setCart(prevCart => prevCart.filter(item => item.id !== productId));
-    };
-
-    const updateQuantity = (productId, quantity) => {
-        if (quantity <= 0) {
-            removeFromCart(productId);
-            return;
-        }
-        setCart(prevCart =>
-            prevCart.map(item =>
-                item.id === productId ? { ...item, quantity } : item
-            )
-        );
-    };
-
+    useEffect(() => { localStorage.setItem('cart', JSON.stringify(cart)); setCartTotal(cart.reduce((s, i) => s + i.price * i.quantity, 0))}, [cart]);
+    const addToCart = (p,q=1) => setCart(c => { const i=c.find(x=>x.id===p.id); if(i) return c.map(x=>x.id===p.id?{...x,quantity:x.quantity+q}:x); return [...c, {...p,quantity:q}]});
+    const removeFromCart = (pId) => setCart(c => c.filter(i => i.id !== pId));
+    const updateQuantity = (pId, q) => { if (q <= 0) { removeFromCart(pId); return; } setCart(c => c.map(i => i.id === pId ? { ...i, quantity: q } : i))};
     const clearCart = () => setCart([]);
-
-    return (
-        <CartContext.Provider value={{ cart, cartTotal, addToCart, removeFromCart, updateQuantity, clearCart }}>
-            {children}
-        </CartContext.Provider>
-    );
+    return <CartContext.Provider value={{ cart, cartTotal, addToCart, removeFromCart, updateQuantity, clearCart }}>{children}</CartContext.Provider>;
 };
-
 export const useCart = () => useContext(CartContext);
+
 
 //=================================================================
 // Reusable UI Components

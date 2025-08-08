@@ -2,27 +2,53 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
+// Import shadcn/ui components using the correct path alias
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "components/ui/textarea";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "components/ui/table";
+
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const BACKEND_URL = 'http://localhost:8000';
+
+const initialFormData = {
+    name: '',
+    description: '',
+    price: '',
+    category: '',
+    stock: ''
+};
 
 export function ProductManagement({ axiosConfig }) {
     const [products, setProducts] = useState([]);
     const [categories, setCategories] = useState([]);
-    const [showForm, setShowForm] = useState(false);
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
-    const [formData, setFormData] = useState({
-        name: '',
-        description: '',
-        price: '',
-        category: '', // Will hold the selected category name
-        stock: ''
-    });
+    const [formData, setFormData] = useState(initialFormData);
     const [imageFile, setImageFile] = useState(null);
+    const [imagePreview, setImagePreview] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    // Fetch both products and categories when the component loads
     useEffect(() => {
-        fetchProducts();
         fetchCategories();
+        fetchProducts();
     }, []);
 
     const fetchProducts = async () => {
@@ -36,8 +62,7 @@ export function ProductManagement({ axiosConfig }) {
 
     const fetchCategories = async () => {
         try {
-            // This is a public endpoint, so no auth is needed, but it's good practice
-            const response = await axios.get(`${API}/categories`, axiosConfig);
+            const response = await axios.get(`${API}/categories`);
             setCategories(response.data);
         } catch (error) {
             toast.error('Failed to fetch categories for the form.');
@@ -49,16 +74,24 @@ export function ProductManagement({ axiosConfig }) {
     };
 
     const handleImageChange = (e) => {
-        if (e.target.files[0]) {
-            setImageFile(e.target.files[0]);
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setImageFile(file);
+            setImagePreview(URL.createObjectURL(file));
         }
     };
 
     const resetForm = () => {
-        setFormData({ name: '', description: '', price: '', category: '', stock: '' });
+        setFormData(initialFormData);
         setImageFile(null);
         setEditingProduct(null);
-        setShowForm(false);
+        setImagePreview('');
+        setIsDialogOpen(false);
+    };
+
+    const handleAddNew = () => {
+        resetForm();
+        setIsDialogOpen(true);
     };
 
     const handleEdit = (product) => {
@@ -70,40 +103,42 @@ export function ProductManagement({ axiosConfig }) {
             category: product.category,
             stock: product.stock,
         });
-        setShowForm(true);
+        if (product.image_url) {
+            setImagePreview(product.image_url); // Cloudinary provides a full URL
+        }
+        setIsDialogOpen(true);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setIsLoading(true);
-        
-        const productData = new FormData();
-        productData.append('name', formData.name);
-        productData.append('description', formData.description);
-        productData.append('price', formData.price);
-        productData.append('category', formData.category);
-        productData.append('stock', formData.stock);
-        if (imageFile) {
-            productData.append('image', imageFile);
+        if (!formData.category) {
+            toast.error("Please select a category.");
+            return;
         }
-
-        const toastId = toast.loading(editingProduct ? 'Updating product...' : 'Creating product...');
+        setIsLoading(true);
+        const toastId = toast.loading('Saving product...');
+        
+        const productPayload = new FormData();
+        Object.entries(formData).forEach(([key, value]) => {
+            productPayload.append(key, value);
+        });
+        if (imageFile) {
+            productPayload.append('image', imageFile);
+        }
 
         try {
             const url = editingProduct 
                 ? `${API}/admin/products-with-image/${editingProduct.id}` 
                 : `${API}/admin/products-with-image`;
-            
             const method = editingProduct ? 'put' : 'post';
 
-            await axios[method](url, productData, axiosConfig);
+            await axios[method](url, productPayload, axiosConfig);
             
-            toast.success(editingProduct ? 'Product updated!' : 'Product created!', { id: toastId });
+            toast.success('Product saved!', { id: toastId });
             resetForm();
-            fetchProducts(); // Refresh product list
+            fetchProducts();
         } catch (error) {
-            toast.error('Operation failed. Please check the details.', { id: toastId });
-            console.error(error);
+            toast.error('Operation failed.', { id: toastId });
         } finally {
             setIsLoading(false);
         }
@@ -125,66 +160,92 @@ export function ProductManagement({ axiosConfig }) {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-semibold">Product Management</h2>
-                <button onClick={() => { resetForm(); setShowForm(true); }} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                    Add Product
-                </button>
+                <Button onClick={handleAddNew}>Add Product</Button>
             </div>
 
-            {showForm && (
-                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <input name="name" value={formData.name} onChange={handleFormChange} placeholder="Name" required className="w-full p-2 border rounded" />
-                        <textarea name="description" value={formData.description} onChange={handleFormChange} placeholder="Description" required className="w-full p-2 border rounded" />
-                        <input name="price" type="number" step="0.01" value={formData.price} onChange={handleFormChange} placeholder="Price" required className="w-full p-2 border rounded" />
-                        <input name="stock" type="number" value={formData.stock} onChange={handleFormChange} placeholder="Stock" required className="w-full p-2 border rounded" />
-                        
-                        {/* Corrected Category Select Dropdown */}
-                        <select name="category" value={formData.category} onChange={handleFormChange} required className="w-full p-2 border rounded">
-                            <option value="" disabled>Select a Category</option>
-                            {categories.length > 0 ? (
-                                categories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)
-                            ) : (
-                                <option disabled>Loading categories...</option>
-                            )}
-                        </select>
-                        
-                        <input type="file" onChange={handleImageChange} className="w-full p-2 border rounded" />
-                        <div className="flex gap-4">
-                            <button type="submit" disabled={isLoading} className="bg-green-600 text-white px-4 py-2 rounded disabled:bg-gray-400">
-                                {isLoading ? 'Saving...' : 'Save Product'}
-                            </button>
-                            <button type="button" onClick={resetForm} className="bg-gray-500 text-white px-4 py-2 rounded">Cancel</button>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>{editingProduct ? 'Edit Product' : 'Add New Product'}</DialogTitle>
+                        <DialogDescription>
+                            Fill in the details for the product here. Click save when you're done.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleSubmit} className="space-y-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="name" className="text-right">Name</Label>
+                            <Input id="name" name="name" value={formData.name} onChange={handleFormChange} className="col-span-3" required />
                         </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="description" className="text-right">Description</Label>
+                            <Textarea id="description" name="description" value={formData.description} onChange={handleFormChange} className="col-span-3" required />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="price" className="text-right">Price</Label>
+                            <Input id="price" name="price" type="number" step="0.01" value={formData.price} onChange={handleFormChange} className="col-span-3" required />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="stock" className="text-right">Stock</Label>
+                            <Input id="stock" name="stock" type="number" value={formData.stock} onChange={handleFormChange} className="col-span-3" required />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="category" className="text-right">Category</Label>
+                            <select id="category" name="category" value={formData.category} onChange={handleFormChange} required className="col-span-3 w-full p-2 border rounded">
+                                <option value="" disabled>-- Select a Category --</option>
+                                {categories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
+                            </select>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="image" className="text-right">Image</Label>
+                            <Input id="image" type="file" onChange={handleImageChange} className="col-span-3" />
+                        </div>
+                        {imagePreview && (
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <div className="col-start-2 col-span-3">
+                                    <img src={imagePreview} alt="Preview" className="w-32 h-32 object-cover rounded-md" />
+                                </div>
+                            </div>
+                        )}
+                        <DialogFooter>
+                            <DialogClose asChild>
+                                <Button type="button" variant="secondary">Cancel</Button>
+                            </DialogClose>
+                            <Button type="submit" disabled={isLoading}>
+                                {isLoading ? 'Saving...' : 'Save Product'}
+                            </Button>
+                        </DialogFooter>
                     </form>
-                </div>
-            )}
+                </DialogContent>
+            </Dialog>
 
             <div className="bg-white rounded-lg shadow-md overflow-x-auto">
-                <table className="w-full">
-                    <thead>
-                        <tr className="bg-gray-50">
-                            <th className="p-3 text-left">Product</th>
-                            <th className="p-3 text-left">Category</th>
-                            <th className="p-3 text-left">Price</th>
-                            <th className="p-3 text-left">Stock</th>
-                            <th className="p-3 text-left">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Image</TableHead>
+                            <TableHead>Product</TableHead>
+                            <TableHead>Price</TableHead>
+                            <TableHead>Stock</TableHead>
+                            <TableHead>Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
                         {products.map(product => (
-                            <tr key={product.id} className="border-b">
-                                <td className="p-3">{product.name}</td>
-                                <td className="p-3">{product.category}</td>
-                                <td className="p-3">₹{product.price}</td>
-                                <td className="p-3">{product.stock}</td>
-                                <td className="p-3 flex gap-2">
-                                    <button onClick={() => handleEdit(product)} className="text-blue-600">Edit</button>
-                                    <button onClick={() => handleDelete(product.id)} className="text-red-600">Delete</button>
-                                </td>
-                            </tr>
+                            <TableRow key={product.id}>
+                                <TableCell>
+                                    <img src={product.image_url} alt={product.name} className="w-16 h-16 object-cover rounded" />
+                                </TableCell>
+                                <TableCell className="font-medium">{product.name}</TableCell>
+                                <TableCell>₹{product.price}</TableCell>
+                                <TableCell>{product.stock}</TableCell>
+                                <TableCell className="flex gap-2">
+                                    <Button variant="outline" size="sm" onClick={() => handleEdit(product)}>Edit</Button>
+                                    <Button variant="destructive" size="sm" onClick={() => handleDelete(product.id)}>Delete</Button>
+                                </TableCell>
+                            </TableRow>
                         ))}
-                    </tbody>
-                </table>
+                    </TableBody>
+                </Table>
             </div>
         </div>
     );
