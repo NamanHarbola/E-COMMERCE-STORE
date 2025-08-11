@@ -49,18 +49,16 @@ export function CheckoutPage() {
         };
 
         try {
-            // Step 1: Create the order in our database
             const orderResponse = await axios.post(`${API}/orders`, orderData);
             const order = orderResponse.data;
 
-            // Step 2: Handle payment based on the selected method
             if (paymentMethod === 'razorpay') {
                 await handleRazorpayPayment(order);
             } else { // Assuming 'cod'
                 await axios.post(`${API}/payments/cod-confirmation?order_id=${order.id}`);
                 toast.success('Order placed successfully!');
                 clearCart();
-                navigate('/');
+                navigate('/profile'); // Redirect to profile page
             }
         } catch (error) {
             toast.error('Failed to place order. Please try again.');
@@ -91,7 +89,7 @@ export function CheckoutPage() {
                         });
                         toast.success('Payment successful! Order confirmed.');
                         clearCart();
-                        navigate('/');
+                        navigate('/profile'); // Redirect to profile page
                     } catch (verifyError) {
                         toast.error('Payment verification failed. Please contact support.');
                     }
@@ -101,6 +99,9 @@ export function CheckoutPage() {
                     email: customerInfo.email,
                     contact: customerInfo.phone,
                 },
+                theme: {
+                    color: "#3399cc"
+                }
             };
 
             const rzp = new window.Razorpay(options);

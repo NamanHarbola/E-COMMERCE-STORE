@@ -29,33 +29,26 @@ import oauth2
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# --- Cloudinary Configuration ---
 cloudinary.config(
     cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME'),
     api_key = os.environ.get('CLOUDINARY_API_KEY'),
     api_secret = os.environ.get('CLOUDINARY_API_SECRET')
 )
 
-# --- Database Connection ---
 mongo_url = os.environ.get('MONGO_URL')
 db_name = os.environ.get('DB_NAME')
 client = AsyncIOMotorClient(mongo_url)
 db = client[db_name]
 
-# --- FastAPI App Initialization ---
-app = FastAPI(title="E-Commerce API", version="1.6.0")
-# We no longer need to serve a local /uploads directory
+app = FastAPI(title="E-Commerce API", version="1.7.0")
 api_router = APIRouter(prefix="/api")
 
 
 #=================================================================
-# Pydantic Models (No changes needed)
+# Pydantic Models
 #=================================================================
 class Product(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str; description: str; price: float; category: str; image_url: str; stock: int = 0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-# ... (Other models remain the same)
+    id: str = Field(default_factory=lambda: str(uuid.uuid4())); name: str; description: str; price: float; category: str; image_url: str; stock: int = 0; created_at: datetime = Field(default_factory=datetime.utcnow)
 class Category(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4())); name: str; description: str
 class CategoryCreate(BaseModel):
@@ -70,21 +63,19 @@ class CustomerPublic(BaseModel):
 class AdminUser(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4())); username: str; password_hash: str
 class Order(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4())); customer_name: str; customer_email: str
-    items: List; total_amount: float; order_status: str = "Placed"; created_at: datetime = Field(default_factory=datetime.utcnow)
+    id: str = Field(default_factory=lambda: str(uuid.uuid4())); customer_name: str; customer_email: str; customer_phone: str; customer_address: str
+    items: List; total_amount: float; order_status: str = "Placed"; payment_method: str; payment_status: str = "pending"; created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 #=================================================================
-# Authentication Dependencies (No changes needed)
+# Authentication Dependencies
 #=================================================================
 async def get_current_admin(token: str = Depends(oauth2.oauth2_scheme)):
-    # ... (logic remains the same)
     credentials_exception = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin credentials")
     username = oauth2.verify_token(token, credentials_exception)
     admin = await db.admin_users.find_one({"username": username})
     if admin is None: raise HTTPException(status_code=401, detail="Admin user not found")
     return admin
-# ... (get_current_customer remains the same)
 async def get_current_customer(token: str = Depends(oauth2.customer_oauth2_scheme)):
     credentials_exception = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
     email = oauth2.verify_token(token, credentials_exception)
@@ -93,9 +84,8 @@ async def get_current_customer(token: str = Depends(oauth2.customer_oauth2_schem
     return customer
 
 #=================================================================
-# Customer & Public Routes (No changes needed)
+# Customer & Public Routes
 #=================================================================
-# ... (All your existing public and customer routes remain the same)
 @api_router.post("/register", response_model=CustomerPublic, tags=["Customer Auth"])
 async def register_customer(request: CustomerCreate):
     existing_customer = await db.customers.find_one({"email": request.email})
@@ -103,12 +93,23 @@ async def register_customer(request: CustomerCreate):
     new_customer_data = Customer(username=request.username, email=request.email, password_hash=Hash.bcrypt(request.password)).dict()
     await db.customers.insert_one(new_customer_data)
     return new_customer_data
+
 @api_router.post("/login", tags=["Customer Auth"])
 async def login_customer(request: OAuth2PasswordRequestForm = Depends()):
     customer = await db.customers.find_one({"email": request.username})
     if not customer or not Hash.verify(customer["password_hash"], request.password): raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     access_token = oauth2.create_access_token(data={"sub": customer["email"]})
     return {"access_token": access_token, "token_type": "bearer", "user": {"email": customer["email"], "username": customer["username"]}}
+
+@api_router.get("/me", response_model=CustomerPublic, tags=["Customer Auth"])
+async def get_customer_me(current_customer: dict = Depends(get_current_customer)):
+    return current_customer
+
+@api_router.get("/my-orders", response_model=List[Order], tags=["Customer Profile"])
+async def get_my_orders(current_customer: dict = Depends(get_current_customer)):
+    orders = await db.orders.find({"customer_email": current_customer["email"]}).sort("created_at", -1).to_list(1000)
+    return orders
+
 @api_router.get("/products", response_model=List[Product], tags=["Public"])
 async def get_products(category: Optional[str] = None, search: Optional[str] = None, sort: Optional[str] = None):
     query = {}
@@ -120,16 +121,22 @@ async def get_products(category: Optional[str] = None, search: Optional[str] = N
     elif sort == "name-asc": cursor = cursor.sort("name", 1)
     products = await cursor.to_list(1000)
     return products
-# ... (and so on for other public routes)
+
+@api_router.get("/products/{product_id}", response_model=Product, tags=["Public"])
+async def get_product(product_id: str):
+    product = await db.products.find_one({"id": product_id})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return product
+
 @api_router.get("/categories", response_model=List[Category], tags=["Public"])
 async def get_categories():
     categories = await db.categories.find().to_list(1000)
     return categories
 
 #=================================================================
-# Admin Routes (UPDATED)
+# Admin Routes
 #=================================================================
-# ... (Admin login, orders, and categories routes remain the same)
 @api_router.post("/admin/login", tags=["Admin Auth"])
 async def login_admin(request: OAuth2PasswordRequestForm = Depends()):
     admin = await db.admin_users.find_one({"username": request.username})
@@ -143,7 +150,6 @@ async def login_admin(request: OAuth2PasswordRequestForm = Depends()):
     access_token = oauth2.create_access_token(data={"sub": admin["username"]})
     return {"access_token": access_token, "token_type": "bearer"}
 
-# --- Admin Product Management (UPDATED FOR CLOUDINARY) ---
 @api_router.post("/admin/products-with-image", response_model=Product, tags=["Admin: Products"])
 async def create_product_with_image(
     name: str = Form(...), description: str = Form(...), price: float = Form(...),
@@ -151,7 +157,6 @@ async def create_product_with_image(
     current_admin: dict = Depends(get_current_admin)
 ):
     try:
-        # Upload image to Cloudinary
         result = cloudinary.uploader.upload(image.file, folder="techmart_products")
         image_url = result.get("secure_url")
     except Exception as e:
@@ -190,24 +195,12 @@ async def update_product_with_image(
     updated_product = await db.products.find_one({"id": product_id})
     return updated_product
 
-# ... (Other admin routes like delete product, categories, orders)
 @api_router.delete("/admin/products/{product_id}", tags=["Admin: Products"])
 async def delete_product(product_id: str, current_admin: dict = Depends(get_current_admin)):
     result = await db.products.delete_one({"id": product_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
     return {"status": "success", "message": "Product deleted"}
-@api_router.post("/admin/categories", response_model=Category, tags=["Admin: Categories"])
-async def create_category(category: CategoryCreate, current_admin: dict = Depends(get_current_admin)):
-    category_data = Category(name=category.name, description=category.description).dict()
-    await db.categories.insert_one(category_data)
-    return category_data
-@api_router.delete("/admin/categories/{category_id}", tags=["Admin: Categories"])
-async def delete_category(category_id: str, current_admin: dict = Depends(get_current_admin)):
-    result = await db.categories.delete_one({"id": category_id})
-    if result.deleted_count == 0: raise HTTPException(status_code=404, detail="Category not found")
-    return {"status": "success", "message": "Category deleted"}
-
 
 # --- Final App Setup ---
 app.include_router(api_router)
