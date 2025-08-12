@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # IMPORTANT: Make sure you have SECRET_KEY in your .env file!
 # Example: SECRET_KEY="a_very_long_and_random_string_for_security"
 load_dotenv()
-SECRET_KEY = os.environ.get("SECRET_KEY")
+SECRET_KEY = os.environ.get("SECRET_KEY") or "dev-secret-change-me"
 ALGORITHM = "HS256"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/admin/login") # For admin

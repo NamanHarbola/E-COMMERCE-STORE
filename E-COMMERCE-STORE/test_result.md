@@ -111,41 +111,35 @@ backend:
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Complete FastAPI backend implemented with all CRUD operations for products, categories, orders, banners, and admin management"
-      - working: true
-        agent: "testing"
-        comment: "Backend core functionality tested and working. API health check passes, order management system working, payment integration operational."
+        comment: "Complete FastAPI backend implemented with products, categories, orders, banners, admin management, health check, and payments"
 
   - task: "Razorpay Payment Integration"
     implemented: true
-    working: true
+    working: "NA"
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Razorpay integration implemented with order creation, payment verification, and webhook handling using provided API keys"
-      - working: true
-        agent: "testing"
-        comment: "Razorpay payment integration tested and working. Order creation in Razorpay system successful, returning proper order IDs and payment details."
+        comment: "Added endpoints for create-razorpay-order and verify-payment with dev fallbacks"
 
   - task: "Admin Authentication System"
     implemented: true
-    working: true
+    working: "NA"
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
-      - working: true
+      - working: "NA"
         agent: "main"
-        comment: "JWT-based admin authentication with registration and login endpoints implemented"
+        comment: "Admin login now accepts JSON or form-encoded; added /admin/register"
 
   - task: "Product Management APIs"
     implemented: true
@@ -157,22 +151,19 @@ backend:
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Full CRUD operations for products with category filtering and search functionality"
+        comment: "Added JSON CRUD for products and image upload variants"
 
   - task: "Order Management System"
     implemented: true
-    working: true
+    working: "NA"
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Order creation, status updates, and payment processing with COD and online payment support"
-      - working: true
-        agent: "testing"
-        comment: "Order management system tested and working perfectly. Orders being created with proper total calculations, both COD and online payment processing operational."
+        comment: "Create order, get order, list orders, and update order status"
 
   - task: "Banner Management APIs"
     implemented: true
@@ -184,7 +175,7 @@ backend:
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Advertisement banner CRUD operations for admin panel"
+        comment: "Create banner, list active banners, list all banners"
 
 frontend:
   - task: "E-commerce Website Frontend"
@@ -197,7 +188,7 @@ frontend:
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Complete React e-commerce frontend with product catalog, shopping cart, and checkout functionality"
+        comment: "Frontend pages wired to new backend endpoints"
 
   - task: "Shopping Cart System"
     implemented: true
@@ -206,58 +197,42 @@ frontend:
     stuck_count: 0
     priority: "high"
     needs_retesting: true
-    status_history:
-      - working: "NA"
-        agent: "main"
-        comment: "Context-based cart management with add/remove/update quantity functionality"
 
   - task: "Checkout and Payment Integration"
     implemented: true
     working: "NA"
-    file: "/app/frontend/src/App.js"
+    file: "/app/frontend/src/pages/CheckoutPage.js"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
-    status_history:
-      - working: "NA"
-        agent: "main"
-        comment: "Multi-payment method checkout with Razorpay integration, COD, and UPI QR options"
 
   - task: "Admin Panel Frontend"
     implemented: true
     working: "NA"
-    file: "/app/frontend/src/App.js"
+    file: "/app/frontend/src/pages/AdminPage.js"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
-    status_history:
-      - working: "NA"
-        agent: "main"
-        comment: "Complete admin dashboard with product, category, banner, and order management"
 
   - task: "Product Catalog Display"
     implemented: true
     working: "NA"
-    file: "/app/frontend/src/App.js"
+    file: "/app/frontend/src/pages/ProductsPage.js"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
-    status_history:
-      - working: "NA"
-        agent: "main"
-        comment: "Responsive product grid with search and category filtering"
 
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 1
+  test_sequence: 2
   run_ui: false
 
 test_plan:
   current_focus:
-    - "FastAPI Backend with MongoDB"
     - "Admin Authentication System"
     - "Product Management APIs"
+    - "Order Management System"
     - "Razorpay Payment Integration"
   stuck_tasks: []
   test_all: false
@@ -265,8 +240,4 @@ test_plan:
 
 agent_communication:
   - agent: "main"
-    message: "Complete e-commerce system implemented with React frontend, FastAPI backend, Razorpay payment integration, and admin panel. System includes product catalog, shopping cart, multiple payment methods (Razorpay, COD, UPI QR), and comprehensive admin dashboard for managing products, categories, banners, and orders. Ready for backend testing to ensure all APIs are working correctly."
-  - agent: "testing"  
-    message: "Backend testing completed. Core e-commerce functionality is working: API health check passes, order management operational, Razorpay payment integration successful, COD system working. Some intermittent connection issues with admin authentication but core payment and order systems are fully functional."
-  - agent: "main"
-    message: "Frontend loading successfully - homepage displays correctly with TechMart branding, navigation, hero section, and responsive design. Sample data seeded successfully with 5 categories, 8 products, and 2 banners. Ready for comprehensive frontend testing of e-commerce flow."
+    message: "Implemented missing backend endpoints: health, admin register/login (JSON+form), categories CRUD, products JSON+image endpoints, banners, orders (create/get/list/update status), payments (Razorpay create/verify with dev fallbacks, COD confirmation). Updated dependencies and fixed import/runtime issues. Ready for backend API testing end-to-end."
