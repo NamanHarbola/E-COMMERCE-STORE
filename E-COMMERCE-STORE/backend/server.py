@@ -141,12 +141,17 @@ async def get_categories():
 async def login_admin(request: OAuth2PasswordRequestForm = Depends()):
     admin = await db.admin_users.find_one({"username": request.username})
     if not admin:
-        if request.username == 'admin' and request.password == 'admin':
-             hashed_password = Hash.bcrypt('admin')
-             await db.admin_users.insert_one({'username': 'admin', 'password_hash': hashed_password})
-             admin = await db.admin_users.find_one({"username": request.username})
-        else: raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin credentials")
-    if not Hash.verify(admin["password_hash"], request.password): raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin credentials")
+        # Secure bootstrap: allow creating the first admin only if the provided credentials match env-configured bootstrap values
+        initial_username = os.environ.get('INITIAL_ADMIN_USERNAME', 'admin')
+        initial_password = os.environ.get('INITIAL_ADMIN_PASSWORD')
+        if request.username == initial_username and initial_password and request.password == initial_password:
+            hashed_password = Hash.bcrypt(request.password)
+            await db.admin_users.insert_one({'username': initial_username, 'password_hash': hashed_password})
+            admin = await db.admin_users.find_one({"username": initial_username})
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin credentials")
+    if not Hash.verify(admin["password_hash"], request.password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin credentials")
     access_token = oauth2.create_access_token(data={"sub": admin["username"]})
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -204,9 +209,18 @@ async def delete_product(product_id: str, current_admin: dict = Depends(get_curr
 
 # --- Final App Setup ---
 app.include_router(api_router)
+
+# CORS configuration: prefer explicit origins via env to avoid insecure wildcard with credentials
+raw_allowed_origins = os.environ.get('ALLOWED_ORIGINS', '').strip()
+if raw_allowed_origins:
+    allow_origins = [o.strip() for o in raw_allowed_origins.split(',') if o.strip()]
+else:
+    # Sensible defaults for local development
+    allow_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
